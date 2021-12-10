@@ -1,13 +1,17 @@
 import sqlite3
+import logging
 
 from flask import Flask, jsonify, json, render_template, request, url_for, redirect, flash
 from werkzeug.exceptions import abort
 
+count = 0
 # Function to get a database connection.
 # This function connects to database with the name `database.db`
 def get_db_connection():
     connection = sqlite3.connect('database.db')
     connection.row_factory = sqlite3.Row
+    global count
+    count+=1
     return connection
 
 # Function to get a post using its ID
@@ -36,13 +40,16 @@ def index():
 def post(post_id):
     post = get_post(post_id)
     if post is None:
+      logging.error('Article "%d" accessed and 404 returned!', post_id)
       return render_template('404.html'), 404
     else:
+      logging.info('Article "%s" retrieved!', post["title"])
       return render_template('post.html', post=post)
 
 # Define the About Us page
 @app.route('/about')
 def about():
+    logging.info('"About us" page is retrieved!')
     return render_template('about.html')
 
 # Define the post creation functionality 
@@ -61,10 +68,53 @@ def create():
             connection.commit()
             connection.close()
 
+            logging.info('Article "%s" created!', title)
             return redirect(url_for('index'))
 
     return render_template('create.html')
 
+@app.route('/healthz')
+def status():
+    try:
+        connection = get_db_connection()
+        posts = connection.execute('SELECT COUNT() FROM posts').fetchone()[0]
+        connection.close()
+        response = app.response_class(
+            response=json.dumps({"result":"OK - healthy"}),
+            status=200,
+            mimetype='application/json'
+        )
+
+        ## log line
+        app.logger.info('Status request successfull')
+        return response
+    except:
+        response = app.response_class(
+            response=json.dumps({"Error":"unhealthy"}),
+            status=500,
+            mimetype='application/json'
+        )
+        ## log line
+        app.logger.info('Status request unsuccessfull')
+        return response
+
+@app.route('/metrics')
+def metrics():
+    connection = get_db_connection()
+    posts = connection.execute('SELECT COUNT() FROM posts').fetchone()[0]
+    connection.close()
+    
+    response = app.response_class(
+            response=json.dumps({"db_connection_count": count, "post_count": posts}),
+            status=200,
+            mimetype='application/json'
+    )
+
+    ## log line
+    app.logger.info('Metrics request successfull')
+    return response
+
 # start the application on port 3111
 if __name__ == "__main__":
+   logging.basicConfig(format='%(levelname)s:%(name)s:%(asctime)s, %(message)s', datefmt='%d/%b/%y, %H:%M:%S', level=logging.DEBUG)
    app.run(host='0.0.0.0', port='3111')
