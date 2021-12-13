@@ -5,7 +5,8 @@ WORKDIR /app
 
 COPY ./techtrends .
 
-RUN pip install -r requirements.txt
+RUN pip install -U pip wheel setuptools && \
+    pip install -r requirements.txt
 
 RUN python init_db.py
 
